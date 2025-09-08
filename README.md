@@ -1,4 +1,4 @@
-# Live2D Vietnam Discord Bot
+# Melar Discord Bot
 
 Bot Discord làm custom cho Melar Studio
 
