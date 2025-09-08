@@ -1,0 +1,37 @@
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+
+# Node modules
+node_modules/
+
+# Data files
+data/
+src/data/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+
+# OSư
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+#local files\
+docs/AI_AGENT_GUIDE.md
+#gonna add this back in the future
+docs/DEVELOPER_GUIDE.md
+CHANGELOG.md
+
+#test command work in progress
+/src/commands/database.js
+dumb

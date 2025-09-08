@@ -1,0 +1,39 @@
+{
+    "modules": {
+        "fun": {
+            "enabled": true,
+            "description": "Fun commands and games",
+            "category": "Entertainment",
+            "dependencies": []
+        },
+        "autoForumPost": {
+            "enabled": true,
+            "description": "Automated forum posting features",
+            "category": "Automation",
+            "dependencies": [
+                "Database"
+            ]
+        },
+        "xFixer": {
+            "enabled": true,
+            "description": "Automatically fixes X.com links to use fixvx.com for better embeds",
+            "category": "Utility",
+            "dependencies": [
+                "Database"
+            ]
+        },
+        "utility": {
+            "enabled": true,
+            "description": "Utility commands and features",
+            "category": "Utility",
+            "dependencies": [
+                "Database"
+            ]
+        }
+    },
+    "settings": {
+        "autoLoadNewModules": true,
+        "enabledByDefault": true,
+        "allowRuntimeToggle": true
+    }
+}

@@ -1,0 +1,32 @@
+# Ignore node_modules
+node_modules
+
+# Ignore logs
+logs/*.log
+
+# Ignore git
+.git
+.gitignore
+
+# Ignore documentation that's not needed in container
+README.md
+CHANGELOG.md
+docs/
+
+# Ignore development files
+.vscode/
+*.log
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Ignore any test files
+test/
+tests/
+*.test.js
