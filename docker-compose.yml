@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: live2d-discord-bot
+    container_name: Melar-bot
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
