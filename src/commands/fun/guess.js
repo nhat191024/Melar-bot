@@ -5,7 +5,7 @@ class NumberGuessCommand extends BaseCommand {
     constructor() {
         super({
             name: 'guess',
-            description: 'Play a number guessing game',
+            description: 'Chơi trò đoán số',
             category: 'fun',
             module: 'fun',
             cooldown: 10
@@ -16,10 +16,15 @@ class NumberGuessCommand extends BaseCommand {
         return super.getSlashCommandData()
             .addIntegerOption(option =>
                 option.setName('max')
-                    .setDescription('Maximum number to guess (default: 10)')
+                    .setDescription('Số lớn nhất để đoán (mặc định: 10)')
                     .setRequired(false)
-                    .setMinValue(5)
+                    .setMinValue(10)
                     .setMaxValue(100)
+            )
+            .addStringOption(option =>
+                option.setName('rule')
+                    .setDescription('Hiển thị luật chơi')
+                    .setRequired(false)
             );
     }
 
@@ -28,7 +33,7 @@ class NumberGuessCommand extends BaseCommand {
 
         if (!funModule) {
             await interaction.reply({
-                content: 'Fun module is not loaded!',
+                content: 'Module vui chưa được tải!',
                 ephemeral: true
             });
             return;
@@ -37,15 +42,49 @@ class NumberGuessCommand extends BaseCommand {
         // Check if game is already active in this channel
         if (funModule.isGameActive(interaction.channelId)) {
             await interaction.reply({
-                content: 'A game is already active in this channel! Finish it first.',
+                content: 'Đang có trò chơi hoạt động trong kênh này! Hãy hoàn thành trước.',
                 ephemeral: true
             });
             return;
         }
 
+        console.log(interaction.options.getString('rule'));
+
+        // If 'rule' option is provided, show the rules
+        if (interaction.options.getString('rule') === 'rule' || interaction.options.getString('rule') === 'true') {
+            const rulesEmbed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('📜 Luật chơi đoán số')
+                .setDescription(
+                    [
+                        'Bạn sẽ có một số lượt đoán để tìm ra số bí mật trong khoảng từ 1 đến {maxNumber}.',
+                        'Mỗi lần đoán, bot sẽ cho bạn biết số của bạn lớn hơn hay nhỏ hơn số bí mật.',
+                        'Hãy cố gắng đoán đúng trong số lượt cho phép!',
+                        '',
+                        'Cách chơi: !guess [max] (max là số lớn nhất, mặc định 10) hoặc dùng lệnh /guess với tùy chọn max.',
+                        '',
+                        '**Lưu ý:**',
+                        '- Nếu khoảng số lớn hơn 20, bạn sẽ cần nhập số đoán bằng tay thay vì dùng nút bấm.',
+                        '- Nếu MaxNumber ≤ 10: Điểm số sẽ giảm còn (50% điểm).',
+                        '- Nếu MaxNumber ≤ 20: Điểm số sẽ giảm còn (70% điểm).',
+                        '- Nếu MaxNumber > 20: Bạn sẽ nhận được điểm đầy đủ.'
+                    ].join('\n')
+                );
+            await interaction.reply({ embeds: [rulesEmbed], ephemeral: true });
+            return;
+        }
+
         const maxNumber = interaction.options.getInteger('max') || 10;
         const secretNumber = Math.floor(Math.random() * maxNumber) + 1;
-        const maxAttempts = Math.ceil(Math.log2(maxNumber)) + 2; // Fair number of attempts
+        const maxAttempts = Math.ceil(maxNumber / 3);
+
+        if (maxNumber < 10 || maxNumber > 100) {
+            await interaction.reply({
+                content: 'Vui lòng chọn số lớn nhất trong khoảng từ 10 đến 100.',
+                ephemeral: true
+            });
+            return;
+        }
 
         // Start the game
         funModule.startGame(interaction.channelId, 'number_guess', {
@@ -59,14 +98,14 @@ class NumberGuessCommand extends BaseCommand {
 
         const embed = new EmbedBuilder()
             .setColor('#FF6B6B')
-            .setTitle('🎯 Number Guessing Game')
-            .setDescription(`I'm thinking of a number between 1 and ${maxNumber}!\nYou have ${maxAttempts} attempts to guess it.`)
+            .setTitle('🎯 Trò chơi đoán số')
+            .setDescription(`Tôi đang nghĩ đến một số từ 1 đến ${maxNumber}!\nBạn có ${maxAttempts} lượt đoán.`)
             .addFields(
-                { name: 'How to play', value: 'Use the buttons below to make your guess!' },
-                { name: 'Attempts left', value: `${maxAttempts}`, inline: true },
-                { name: 'Range', value: `1 - ${maxNumber}`, inline: true }
+                { name: 'Cách chơi', value: 'Dùng các nút bên dưới để đoán số!' },
+                { name: 'Lượt còn lại', value: `${maxAttempts}`, inline: true },
+                { name: 'Khoảng số', value: `1 - ${maxNumber}`, inline: true }
             )
-            .setFooter({ text: `Game started by ${interaction.user.username}` })
+            .setFooter({ text: `Trò chơi bắt đầu bởi ${interaction.user.username}` })
             .setTimestamp();
 
         // Create number buttons (for smaller ranges)
@@ -91,18 +130,18 @@ class NumberGuessCommand extends BaseCommand {
                 .addComponents(
                     new ButtonBuilder()
                         .setCustomId('guess_hint')
-                        .setLabel('Get Hint')
+                        .setLabel('Gợi ý')
                         .setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder()
                         .setCustomId('guess_quit')
-                        .setLabel('Quit Game')
+                        .setLabel('Thoát trò chơi')
                         .setStyle(ButtonStyle.Danger)
                 );
             rows.push(row);
 
             embed.addFields({
-                name: 'Large Range Mode',
-                value: 'Type your guess as a message or use buttons for hints!'
+                name: 'Chế độ khoảng lớn',
+                value: 'Gõ số bạn đoán hoặc dùng nút để nhận gợi ý!'
             });
         }
 
@@ -113,7 +152,7 @@ class NumberGuessCommand extends BaseCommand {
             const filter = m => m.author.id === interaction.user.id && !isNaN(m.content);
             const collector = interaction.channel.createMessageCollector({
                 filter,
-                time: 300000 // 5 minutes
+                time: 300000 // 5 phút
             });
 
             collector.on('collect', async (message) => {
@@ -134,7 +173,7 @@ class NumberGuessCommand extends BaseCommand {
             collector.on('end', () => {
                 if (funModule.isGameActive(interaction.channelId)) {
                     funModule.endGame(interaction.channelId);
-                    interaction.followUp('⏰ Game timed out! The game has ended.');
+                    interaction.followUp('⏰ Hết thời gian! Trò chơi đã kết thúc.');
                 }
             });
         }
@@ -152,7 +191,14 @@ class NumberGuessCommand extends BaseCommand {
 
         if (guess === secretNumber) {
             // Correct guess!
-            const score = Math.max(100 - (game.attempts - 1) * 10, 10);
+            let score = Math.max(100 - (game.attempts - 1) * 10, 10);
+            if (maxNumber <= 10) {
+                score = Math.floor(score * 0.5);
+            } else if (maxNumber <= 20) {
+                score = Math.floor(score * 0.7);
+            } else {
+                score = Math.floor(score * 1);
+            }
             const duration = Math.floor((Date.now() - game.startTime) / 1000);
 
             await funModule.updateUserStats(interaction.user.id, interaction.user.username, {
@@ -165,13 +211,13 @@ class NumberGuessCommand extends BaseCommand {
 
             resultEmbed = new EmbedBuilder()
                 .setColor('#00FF00')
-                .setTitle('🎉 Congratulations!')
-                .setDescription(`You guessed it! The number was **${secretNumber}**.`)
+                .setTitle('🎉 Chúc mừng!')
+                .setDescription(`Bạn đã đoán đúng! Số bí mật là **${secretNumber}**.`)
                 .addFields(
-                    { name: 'Attempts used', value: `${game.attempts}/${maxAttempts}`, inline: true },
-                    { name: 'Score', value: `${score} points`, inline: true }
+                    { name: 'Số lần đoán', value: `${game.attempts}/${maxAttempts}`, inline: true },
+                    { name: 'Điểm số', value: `${score} điểm`, inline: true }
                 )
-                .setFooter({ text: `Great job, ${interaction.user.username}!` });
+                .setFooter({ text: `Làm tốt lắm, ${interaction.user.username}!` });
 
             gameEnded = true;
         } else if (game.attempts >= maxAttempts) {
@@ -188,28 +234,29 @@ class NumberGuessCommand extends BaseCommand {
 
             resultEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
-                .setTitle('😞 Game Over!')
-                .setDescription(`You're out of attempts! The number was **${secretNumber}**.`)
+                .setTitle('😞 Thua cuộc!')
+                .setDescription(`Bạn đã hết lượt đoán! Số bí mật là **${secretNumber}**.`)
                 .addFields(
-                    { name: 'Attempts used', value: `${game.attempts}/${maxAttempts}`, inline: true }
+                    { name: 'Số lần đoán', value: `${game.attempts}/${maxAttempts}`, inline: true }
                 )
-                .setFooter({ text: 'Better luck next time!' });
+                .setFooter({ text: 'Chúc may mắn lần sau!' });
 
             gameEnded = true;
         } else {
             // Wrong guess, give hint
-            const hint = guess < secretNumber ? 'higher' : 'lower';
+            const hint = guess > secretNumber ? 'lớn' : 'nhỏ';
+            const hint2 = guess < secretNumber ? 'lớn hơn' : 'nhỏ hơn';
             const attemptsLeft = maxAttempts - game.attempts;
 
             resultEmbed = new EmbedBuilder()
                 .setColor('#FFA500')
-                .setTitle('🤔 Try Again!')
-                .setDescription(`**${guess}** is too ${hint}! Try a ${hint} number.`)
+                .setTitle('🤔 Đoán lại nhé!')
+                .setDescription(`**${guess}** quá ${hint}! Hãy thử số ${hint2}.`)
                 .addFields(
-                    { name: 'Attempts left', value: `${attemptsLeft}`, inline: true },
-                    { name: 'Range', value: `1 - ${maxNumber}`, inline: true }
+                    { name: 'Lượt còn lại', value: `${attemptsLeft}`, inline: true },
+                    { name: 'Khoảng số', value: `1 - ${maxNumber}`, inline: true }
                 )
-                .setFooter({ text: 'Keep trying!' });
+                .setFooter({ text: 'Tiếp tục cố gắng nhé!' });
         }
 
         if (gameEnded) {
