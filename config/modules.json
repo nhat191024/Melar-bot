@@ -29,6 +29,14 @@
             "dependencies": [
                 "Database"
             ]
+        },
+        "taskManager": {
+            "enabled": true,
+            "description": "Task management and assignment features",
+            "category": "Productivity",
+            "dependencies": [
+                "Database"
+            ]
         }
     },
     "settings": {
