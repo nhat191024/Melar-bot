@@ -35,3 +35,4 @@ CHANGELOG.md
 #test command work in progress
 /src/commands/database.js
 dumb
+/docs
