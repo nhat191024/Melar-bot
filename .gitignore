@@ -36,3 +36,4 @@ CHANGELOG.md
 /src/commands/database.js
 dumb
 /docs
+/tests
