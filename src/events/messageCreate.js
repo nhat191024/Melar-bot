@@ -75,10 +75,12 @@ class MessageCreateEvent extends BaseEvent {
             channelId: message.channel.id,
             client: message.client,
             createdTimestamp: message.createdTimestamp,
+            content: message.content,
 
             // Fake interaction methods
             isSlashCommand: () => false,
             isPrefixCommand: () => true,
+            isChatInputCommand: () => false,
 
             reply: async (options) => {
                 if (typeof options === 'string') {
