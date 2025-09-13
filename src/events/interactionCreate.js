@@ -21,15 +21,64 @@ class InteractionCreateEvent extends BaseEvent {
             await this.handleButtonInteraction(interaction);
             return;
         }
+
+        // Handle select menu interactions
+        if (interaction.isStringSelectMenu()) {
+            await this.handleSelectMenuInteraction(interaction);
+            return;
+        }
     }
 
     async handleButtonInteraction(interaction) {
+        // Handle task list pagination buttons
+        if (interaction.customId.startsWith('task_list_')) {
+            const taskListCommand = interaction.client.moduleManager.getCommand('task_list');
+            if (taskListCommand && await taskListCommand.handleButtonInteraction(interaction)) {
+                return;
+            }
+        }
+
+        // Handle task history pagination buttons
+        if (interaction.customId.startsWith('task_history_')) {
+            const taskHistoryCommand = interaction.client.moduleManager.getCommand('task_history');
+            if (taskHistoryCommand && await taskHistoryCommand.handleButtonInteraction(interaction)) {
+                return;
+            }
+        }
+
         // Handle fun module button interactions
         if (interaction.customId.startsWith('guess_')) {
             const funModule = interaction.client.moduleManager.getModule('fun');
             if (!funModule) return;
 
             await this.handleGuessGame(interaction, funModule);
+        }
+    }
+
+    async handleSelectMenuInteraction(interaction) {
+        // Handle task history status selection
+        if (interaction.customId.startsWith('task_history_status_')) {
+            const taskHistoryCommand = interaction.client.moduleManager.getCommand('task_history');
+            if (taskHistoryCommand) {
+                const targetUserId = interaction.customId.split('_')[3]; // Extract user ID from custom ID
+                const selectedStatus = interaction.values[0];
+
+                await interaction.deferUpdate();
+                await taskHistoryCommand.handleStatusSelection(interaction, selectedStatus, targetUserId);
+                return;
+            }
+        }
+
+        // Handle task status update selection
+        if (interaction.customId.startsWith('task_update_status_')) {
+            const taskUpdateCommand = interaction.client.moduleManager.getCommand('task_update_status');
+            if (taskUpdateCommand) {
+                const taskId = parseInt(interaction.customId.split('_')[3]); // Extract task ID from custom ID
+                const selectedStatus = interaction.values[0];
+
+                await taskUpdateCommand.handleStatusUpdate(interaction, taskId, selectedStatus);
+                return;
+            }
         }
     }
 
