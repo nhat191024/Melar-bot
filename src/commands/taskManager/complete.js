@@ -32,6 +32,18 @@ class TaskCompleteCommand extends BaseCommand {
             }
 
             const taskId = interaction.options.getInteger('id');
+
+            if (!taskId || taskId <= 0) {
+                const prefix = this.getPrefix();
+                return await interaction._originalMessage.channel.send(
+                    `❌ **Cách sử dụng lệnh prefix:**\n` +
+                    `\`${prefix}${this.name} <ID task>\`` +
+                    `\n\n` +
+                    `**Ví dụ:**\n` +
+                    `\`${prefix}${this.name} 123\`\n\n`
+                );
+            }
+
             const member = await interaction.guild.members.fetch(interaction.user.id);
             const canManageTasks = member.permissions.has(PermissionFlagsBits.Administrator);
 
