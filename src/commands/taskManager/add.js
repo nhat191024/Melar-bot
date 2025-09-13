@@ -81,6 +81,7 @@ class AddTaskCommand extends BaseCommand {
     }
 
     async handlePrefix(interaction, taskManagerModule) {
+        const prefix = this.getPrefix();
         let title, description, link, time, date;
         let assigneesTag = [];
         let assigneesId = [];
@@ -92,8 +93,21 @@ class AddTaskCommand extends BaseCommand {
             }
         });
 
-        if (assigneesId.length === 0) {
-            return await interaction.reply({ content: '❌ Vui lòng tag ít nhất một người dùng hợp lệ để giao công việc.', ephemeral: true });
+        const args = interaction._originalMessage.content.slice(prefix.length + this.name.length).trim().split(' ');
+
+        if (args.length === 0 || args[0] === '') {
+            return await interaction._originalMessage.channel.send(
+                `❌ **Cách sử dụng lệnh prefix:**\n` +
+                `\`${prefix}${this.name} @<người dùng>\`` +
+                `Sau đó bấm xác nhận và điền các thông tin cần thiết.\n` +
+                `\n` +
+                `**Ví dụ:**\n` +
+                `\`${prefix}${this.name} @Melar @AnotherUser\`\n\n` +
+                `**Lưu ý:**\n` +
+                `• Bạn có thể tag nhiều người dùng để giao công việc cho họ.\n` +
+                `• Đảm bảo rằng các người dùng được tag là hợp lệ và không phải bot.\n` +
+                `• Sử dụng \`/${this.name}\` chỉ có thể giao việc cho 1 user\n`
+            );
         }
 
         const embed = new EmbedBuilder()
