@@ -3,6 +3,7 @@ const Config = require('./utils/Config');
 const Logger = require('./utils/Logger');
 const ModuleManager = require('./utils/ModuleManager');
 const Database = require('./utils/Database');
+const NodeCron = require('./utils/NodeCron');
 
 class DiscordBot extends Client {
     constructor() {
@@ -20,6 +21,7 @@ class DiscordBot extends Client {
         this.logger = Logger;
         this.moduleManager = new ModuleManager(this);
         this.database = Database;
+        this.nodeCron = NodeCron;
     }
 
     async start() {
@@ -39,11 +41,17 @@ class DiscordBot extends Client {
             // Initialize database connection
             await Database.initialize();
 
+            // Initialize NodeCron helper
+            await NodeCron.initialize();
+
             // Cleanup existing handlers (important for development with --watch)
             this.moduleManager.cleanup();
 
             // Load modules first
             await this.moduleManager.loadModules();
+
+            // Make moduleManager globally accessible for cron jobs
+            global.moduleManager = this.moduleManager;
 
             // Load commands and events
             await this.moduleManager.loadCommands();
