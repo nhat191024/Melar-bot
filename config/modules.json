@@ -27,7 +27,8 @@
             "description": "Utility commands and features",
             "category": "Utility",
             "dependencies": [
-                "Database"
+                "Database",
+                "NodeCron"
             ]
         },
         "taskManager": {
@@ -35,7 +36,8 @@
             "description": "Task management and assignment features",
             "category": "Productivity",
             "dependencies": [
-                "Database"
+                "Database",
+                "NodeCron"
             ]
         }
     },
