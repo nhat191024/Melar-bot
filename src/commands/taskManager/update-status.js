@@ -9,6 +9,7 @@ class TaskUpdateStatusCommand extends BaseCommand {
         this.category = 'productivity';
         this.module = 'taskManager';
         this.cooldown = 3;
+        this.permissions = [PermissionFlagsBits.Administrator];
     }
 
     getSlashCommandData() {
@@ -28,16 +29,6 @@ class TaskUpdateStatusCommand extends BaseCommand {
             if (!taskManagerModule) {
                 return await interaction.reply({
                     content: `❌ Module ${this.module} chưa được khởi chạy.`
-                });
-            }
-
-            const member = await interaction.guild.members.fetch(interaction.user.id);
-            const canManageTasks = member.permissions.has(PermissionFlagsBits.Administrator);
-
-            if (!canManageTasks) {
-                return await interaction.reply({
-                    content: '❌ Chỉ admin mới có thể cập nhật trạng thái task.',
-                    ephemeral: true
                 });
             }
 
