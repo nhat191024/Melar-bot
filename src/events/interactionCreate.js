@@ -16,6 +16,12 @@ class InteractionCreateEvent extends BaseEvent {
             return;
         }
 
+        // Handle modal submissions
+        if (interaction.isModalSubmit()) {
+            await this.handleModalSubmit(interaction);
+            return;
+        }
+
         // Handle button interactions
         if (interaction.isButton()) {
             await this.handleButtonInteraction(interaction);
@@ -132,6 +138,43 @@ class InteractionCreateEvent extends BaseEvent {
         const guessCommand = interaction.client.moduleManager.getCommand('guess');
         if (guessCommand) {
             await guessCommand.processGuess(interaction, guess, funModule);
+        }
+    }
+
+    async handleModalSubmit(interaction) {
+        try {
+            // Handle task add modal
+            if (interaction.customId === 'task_add_modal') {
+                const taskAddCommand = interaction.client.moduleManager.getCommand('task_add');
+                if (taskAddCommand && typeof taskAddCommand.handleModalSubmit === 'function') {
+                    await taskAddCommand.handleModalSubmit(interaction);
+                    return;
+                }
+            }
+
+            // Handle note add modal
+            if (interaction.customId === 'note_add_modal') {
+                const noteAddCommand = interaction.client.moduleManager.getCommand('note_add');
+                if (noteAddCommand && typeof noteAddCommand.handleModalSubmit === 'function') {
+                    await noteAddCommand.handleModalSubmit(interaction);
+                    return;
+                }
+            }
+
+            // If no command handled the modal, send a generic error
+            await interaction.reply({
+                content: '❌ Đã xảy ra lỗi khi xử lý form.',
+                ephemeral: true
+            });
+
+        } catch (error) {
+            console.error('Error handling modal submit:', error);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: '❌ Đã xảy ra lỗi khi xử lý form.',
+                    ephemeral: true
+                });
+            }
         }
     }
 }
