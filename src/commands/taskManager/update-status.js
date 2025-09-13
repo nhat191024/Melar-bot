@@ -34,6 +34,17 @@ class TaskUpdateStatusCommand extends BaseCommand {
 
             const taskId = interaction.options.getInteger('id');
 
+            if (!taskId || taskId <= 0) {
+                const prefix = this.getPrefix();
+                return await interaction._originalMessage.channel.send(
+                    `❌ **Cách sử dụng lệnh prefix:**\n` +
+                    `\`${prefix}${this.name} <ID task>\`` +
+                    `\n\n` +
+                    `**Ví dụ:**\n` +
+                    `\`${prefix}${this.name} 123\`\n\n`
+                );
+            }
+
             // Get task details first to verify it exists
             const taskDetails = await taskManagerModule.getTaskById(taskId);
 
