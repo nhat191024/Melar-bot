@@ -130,10 +130,16 @@ class TaskHistoryCommand extends BaseCommand {
             const taskManagerModule = interaction.client.moduleManager.modules.get('taskManager');
 
             if (!taskManagerModule) {
-                return await interaction.reply({
+                const errorMessage = {
                     content: '❌ Module taskManager chưa được khởi chạy.',
                     ephemeral: true
-                });
+                };
+
+                if (interaction.replied || interaction.deferred) {
+                    return await interaction.followUp(errorMessage);
+                } else {
+                    return await interaction.reply(errorMessage);
+                }
             }
 
             const member = await interaction.guild.members.fetch(interaction.user.id);
@@ -163,11 +169,27 @@ class TaskHistoryCommand extends BaseCommand {
 
             if (tasks.length === 0) {
                 const statusLabel = this.getStatusLabel(selectedStatus);
-                await interaction.update({
-                    content: `❌ Không tìm thấy công việc nào với trạng thái "${statusLabel}".`,
-                    embeds: [],
-                    components: []
-                });
+                try {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.update({
+                            content: `❌ Không tìm thấy công việc nào với trạng thái "${statusLabel}".`,
+                            embeds: [],
+                            components: []
+                        });
+                    } else {
+                        await interaction.editReply({
+                            content: `❌ Không tìm thấy công việc nào với trạng thái "${statusLabel}".`,
+                            embeds: [],
+                            components: []
+                        });
+                    }
+                } catch (updateError) {
+                    console.error('Error updating interaction for empty tasks:', updateError);
+                    await interaction.followUp({
+                        content: `❌ Không tìm thấy công việc nào với trạng thái "${statusLabel}".`,
+                        ephemeral: true
+                    });
+                }
                 return;
             }
 
@@ -175,10 +197,17 @@ class TaskHistoryCommand extends BaseCommand {
 
         } catch (error) {
             console.error('Error handling status selection:', error);
-            await interaction.reply({
+
+            const errorMessage = {
                 content: '❌ Đã xảy ra lỗi khi xử lý yêu cầu.',
                 ephemeral: true
-            });
+            };
+
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage);
+            } else {
+                await interaction.reply(errorMessage);
+            }
         }
     }
 
@@ -301,12 +330,22 @@ class TaskHistoryCommand extends BaseCommand {
 
         const messageOptions = { embeds: [embed], components: [row] };
 
-        if (isUpdate || interaction.isSelectMenu()) {
-            return await interaction.update(messageOptions);
-        } else if (interaction.replied || interaction.deferred) {
-            return await interaction.editReply(messageOptions);
-        } else {
-            return await interaction.reply(messageOptions);
+        try {
+            if (isUpdate && interaction.isSelectMenu() && !interaction.replied && !interaction.deferred) {
+                return await interaction.update(messageOptions);
+            } else if (interaction.replied || interaction.deferred) {
+                return await interaction.editReply(messageOptions);
+            } else {
+                return await interaction.reply(messageOptions);
+            }
+        } catch (error) {
+            console.error('Error in sendPaginatedHistory:', error);
+            // Fallback to followUp if all else fails
+            if (!interaction.replied && !interaction.deferred) {
+                return await interaction.reply({ ...messageOptions, ephemeral: true });
+            } else {
+                return await interaction.followUp({ ...messageOptions, ephemeral: true });
+            }
         }
     }
 
@@ -419,10 +458,16 @@ class TaskHistoryCommand extends BaseCommand {
 
             const taskManagerModule = interaction.client.moduleManager.modules.get('taskManager');
             if (!taskManagerModule) {
-                return await interaction.reply({
+                const errorMessage = {
                     content: '❌ Module taskManager chưa được khởi chạy.',
                     ephemeral: true
-                });
+                };
+
+                if (interaction.replied || interaction.deferred) {
+                    return await interaction.followUp(errorMessage);
+                } else {
+                    return await interaction.reply(errorMessage);
+                }
             }
 
             const member = await interaction.guild.members.fetch(interaction.user.id);
