@@ -163,7 +163,7 @@ class UtilityModule {
 
             if (!dateString && !timeString) return null;
 
-            let targetDate = new Date();
+            let vietnamMoment;
 
             if (dateString) {
                 // Parse DD/MM/YYYY or DD/MM format
@@ -171,18 +171,21 @@ class UtilityModule {
                 if (dateParts.length === 2) {
                     // DD/MM format - use current year
                     const day = parseInt(dateParts[0]);
-                    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+                    const month = parseInt(dateParts[1]);
                     const year = new Date().getFullYear();
-                    targetDate = new Date(year, month, day);
+                    vietnamMoment = VietnamTime.now().year(year).month(month - 1).date(day);
                 } else if (dateParts.length === 3) {
                     // DD/MM/YYYY format
                     const day = parseInt(dateParts[0]);
-                    const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
+                    const month = parseInt(dateParts[1]);
                     const year = parseInt(dateParts[2]);
-                    targetDate = new Date(year, month, day);
+                    vietnamMoment = VietnamTime.now().year(year).month(month - 1).date(day);
                 } else {
                     throw new Error('Invalid date format');
                 }
+            } else {
+                // Only time provided, use today
+                vietnamMoment = VietnamTime.now();
             }
 
             if (timeString) {
@@ -191,17 +194,17 @@ class UtilityModule {
                 if (timeParts.length === 2) {
                     const hours = parseInt(timeParts[0]);
                     const minutes = parseInt(timeParts[1]);
-                    targetDate.setHours(hours, minutes, 0, 0);
+                    vietnamMoment.hours(hours).minutes(minutes).seconds(0).milliseconds(0);
                 } else {
                     throw new Error('Invalid time format');
                 }
             } else if (dateString) {
                 // If only date is provided, set time to 23:00
-                targetDate.setHours(23, 0, 0, 0);
+                vietnamMoment.hours(23).minutes(0).seconds(0).milliseconds(0);
             }
 
-            // Convert to Vietnam timezone
-            return VietnamTime.toVietnamTime(targetDate);
+            // Convert to JavaScript Date object
+            return VietnamTime.toDate(vietnamMoment);
 
         } catch (error) {
             Logger.error(`Failed to parse deadline: ${error.message}`);
@@ -215,16 +218,16 @@ class UtilityModule {
      */
     async getNotesForReminder() {
         try {
-            const now = new Date();
             const VietnamTime = require('../utils/VietnamTime');
-            const vietnamNow = VietnamTime.toVietnamTime(now);
+            const vietnamNow = VietnamTime.now();
 
             // Calculate reminder thresholds
-            const oneHour = new Date(vietnamNow.getTime() + (1 * 60 * 60 * 1000));
-            const oneDay = new Date(vietnamNow.getTime() + (1 * 24 * 60 * 60 * 1000));
-            const threeDays = new Date(vietnamNow.getTime() + (3 * 24 * 60 * 60 * 1000));
-            const oneWeek = new Date(vietnamNow.getTime() + (7 * 24 * 60 * 60 * 1000));
-            const twoWeeks = new Date(vietnamNow.getTime() + (14 * 24 * 60 * 60 * 1000));
+            const oneHour = VietnamTime.toDate(vietnamNow.clone().add(1, 'hour'));
+            const oneDay = VietnamTime.toDate(vietnamNow.clone().add(1, 'day'));
+            const threeDays = VietnamTime.toDate(vietnamNow.clone().add(3, 'days'));
+            const oneWeek = VietnamTime.toDate(vietnamNow.clone().add(1, 'week'));
+            const twoWeeks = VietnamTime.toDate(vietnamNow.clone().add(2, 'weeks'));
+            const currentTime = VietnamTime.toDate(vietnamNow);
 
             const query = `
                 SELECT n.*, 
@@ -264,7 +267,7 @@ class UtilityModule {
             const params = [
                 oneHour, oneDay, threeDays, oneWeek, twoWeeks,
                 oneHour, oneDay, threeDays, oneWeek, twoWeeks,
-                vietnamNow,
+                currentTime,
                 oneHour, oneDay, threeDays, oneWeek, twoWeeks
             ];
 
@@ -283,19 +286,12 @@ class UtilityModule {
         if (!deadline) return null;
 
         try {
-            const date = new Date(deadline);
-            if (isNaN(date.getTime())) return null;
+            const VietnamTime = require('../utils/VietnamTime');
+            const momentObj = VietnamTime.create(deadline);
 
-            const dayNames = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
-            const dayName = dayNames[date.getDay()];
+            if (!momentObj.isValid()) return null;
 
-            const day = date.getDate().toString().padStart(2, '0');
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const year = date.getFullYear();
-            const hours = date.getHours().toString().padStart(2, '0');
-            const minutes = date.getMinutes().toString().padStart(2, '0');
-
-            return `${dayName}, ${day}/${month}/${year} lúc ${hours}:${minutes}`;
+            return VietnamTime.formatVN(momentObj).fullDisplay;
         } catch (error) {
             return null;
         }
