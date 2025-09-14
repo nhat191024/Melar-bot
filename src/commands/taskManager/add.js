@@ -93,9 +93,7 @@ class AddTaskCommand extends BaseCommand {
             }
         });
 
-        const args = interaction._originalMessage.content.slice(prefix.length + this.name.length).trim().split(' ');
-
-        if (args.length === 0 || args[0] === '') {
+        if (assigneesId.length === 0 || assigneesTag.length === 0) {
             return await interaction._originalMessage.channel.send(
                 `❌ **Cách sử dụng lệnh prefix:**\n` +
                 `\`${prefix}${this.name} @<người dùng>\`` +
