@@ -22,6 +22,9 @@ class NodeCron {
         try {
             Logger.loading('Initializing NodeCron helper...');
 
+            // Clear any existing active cron jobs to prevent duplicates
+            this.clearAllActiveCronJobs();
+
             await this.createTables();
             await this.loadCronJobsFromDatabase();
 
@@ -31,6 +34,17 @@ class NodeCron {
             Logger.error(`❌ Failed to initialize NodeCron helper: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Clear all active cron jobs from memory
+     */
+    clearAllActiveCronJobs() {
+        for (const [cronJobId] of this.activeCronJobs) {
+            this.stopCronJob(cronJobId);
+        }
+        this.activeCronJobs.clear();
+        Logger.info('🧹 Cleared all active cron jobs from memory');
     }
 
     /**
@@ -119,6 +133,9 @@ class NodeCron {
             if (!cron.validate(cronExpression)) {
                 throw new Error(`Invalid cron expression: ${cronExpression}`);
             }
+
+            // Check for existing job with same name and stop it
+            await this.stopCronJobByName(name);
 
             // Calculate next run time
             const nextRun = this.getNextRunTime(cronExpression);
@@ -356,9 +373,35 @@ class NodeCron {
 
             Logger.success(`✅ Loaded ${cronJobs.length} active cron jobs from database`);
 
+            // Cleanup orphaned cron jobs
+            await this.cleanupOrphanedCronJobs();
+
         } catch (error) {
             Logger.error(`❌ Failed to load cron jobs from database: ${error.message}`);
             throw error;
+        }
+    }
+
+    /**
+     * Cleanup cron jobs that are running in memory but no longer exist in database
+     */
+    async cleanupOrphanedCronJobs() {
+        try {
+            // Get all cron job IDs from database
+            const query = 'SELECT id FROM cron_jobs';
+            const dbJobs = await Database.execute(query);
+            const dbJobIds = new Set(dbJobs.map(job => job.id));
+
+            // Check active cron jobs and remove orphaned ones
+            for (const [cronJobId] of this.activeCronJobs) {
+                if (!dbJobIds.has(cronJobId)) {
+                    Logger.warn(`🧹 Cleaning up orphaned cron job: ${cronJobId}`);
+                    this.stopCronJob(cronJobId);
+                }
+            }
+
+        } catch (error) {
+            Logger.error(`❌ Failed to cleanup orphaned cron jobs: ${error.message}`);
         }
     }
 
@@ -494,6 +537,27 @@ class NodeCron {
     }
 
     /**
+     * Stop a cron job by name
+     * @param {string} jobName - Name of the cron job to stop
+     */
+    async stopCronJobByName(jobName) {
+        try {
+            // Find job in database
+            const query = 'SELECT id FROM cron_jobs WHERE name = ?';
+            const jobs = await Database.execute(query, [jobName]);
+
+            if (jobs && jobs.length > 0) {
+                const jobId = jobs[0].id;
+                this.stopCronJob(jobId);
+                Logger.info(`⏹️ Stopped existing cron job: ${jobName}`);
+            }
+
+        } catch (error) {
+            Logger.error(`❌ Failed to stop cron job by name ${jobName}: ${error.message}`);
+        }
+    }
+
+    /**
      * Execute a cron job function
      * @param {Object} jobData - Cron job data from database
      */
@@ -619,6 +683,15 @@ class NodeCron {
      */
     async logExecution(cronJobId, status, duration, output, errorMessage) {
         try {
+            // First verify that the cron job still exists in database
+            const checkQuery = 'SELECT id FROM cron_jobs WHERE id = ?';
+            const jobExists = await Database.execute(checkQuery, [cronJobId]);
+
+            if (!jobExists || jobExists.length === 0) {
+                Logger.warn(`⚠️  Skipping log for non-existent cron job ${cronJobId}`);
+                return;
+            }
+
             const query = `
                 INSERT INTO cron_logs (
                     cron_job_id, status, execution_duration_ms, output, error_message
