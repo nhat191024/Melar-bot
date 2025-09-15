@@ -240,32 +240,32 @@ class TaskHistoryCommand extends BaseCommand {
             let taskInfo = [];
 
             if (task.description && task.description.trim()) {
-                taskInfo.push(`**📝 Mô tả:** ${task.description}`);
+                taskInfo.push(`**Mô tả:** ${task.description}`);
             }
 
             if (task.user_id) {
-                taskInfo.push(`**👤 Người được giao:** <@${task.user_id}>`);
+                taskInfo.push(`**Người được giao:** <@${task.user_id}>`);
             }
 
             if (task.created_by_user_id) {
-                taskInfo.push(`**✍️ Người tạo:** <@${task.created_by_user_id}>`);
+                taskInfo.push(`**Người tạo:** <@${task.created_by_user_id}>`);
             }
 
-            taskInfo.push(`**📊 Trạng thái:** ${this.getStatusLabel(task.status)}`);
+            taskInfo.push(`**Trạng thái:** ${this.getStatusLabel(task.status)}`);
 
             const formattedDeadline = this.formatDeadlineVietnamese(task.deadline);
             if (formattedDeadline) {
-                taskInfo.push(`**⏰ Hạn chót:** ${formattedDeadline}`);
+                taskInfo.push(`**Hạn chót:** ${formattedDeadline}`);
             }
 
             if (task.link && task.link.trim()) {
-                taskInfo.push(`**🔗 Link:** [Xem chi tiết](${task.link})`);
+                taskInfo.push(`**Link:** [Xem chi tiết](${task.link})`);
             }
 
             // Add creation date
             if (task.created_at) {
                 const createdDate = this.formatDeadlineVietnamese(task.created_at);
-                taskInfo.push(`**📅 Ngày tạo:** ${createdDate}`);
+                taskInfo.push(`**Ngày tạo:** ${createdDate}`);
             }
 
             // Special formatting for different statuses
