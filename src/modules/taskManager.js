@@ -42,6 +42,14 @@ class TaskManagerModule {
                 Logger.warn(`⚠️ Failed to schedule overdue task checker: ${cronError.message}`);
             }
 
+            // Restore task reminders after bot restart
+            try {
+                await this.restoreTaskReminders();
+                Logger.info('✅ Task reminders restored successfully');
+            } catch (restoreError) {
+                Logger.warn(`⚠️ Failed to restore task reminders: ${restoreError.message}`);
+            }
+
             Logger.module(`${this.name} module method loaded successfully`);
         } catch (error) {
             Logger.error(`Failed to load ${this.name} module: ${error.message}`);
@@ -68,6 +76,7 @@ class TaskManagerModule {
                     description TEXT NULL,
                     link VARCHAR(255) NULL,
                     created_by_user_id VARCHAR(30) NOT NULL,
+                    created_at_channel VARCHAR(30) NULL,
                     status ENUM('pending', 'in_progress', 'completed', 'canceled', 'overdue') NOT NULL DEFAULT 'in_progress',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -129,15 +138,42 @@ class TaskManagerModule {
     async createTask(title, userIds, createdBy, description = null, link = null, time = null, date = null, createdAtChannel = null) {
         try {
             const query = `
-                    INSERT INTO tasks (title, description, link, created_by_user_id)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO tasks (title, description, link, created_by_user_id, created_at_channel)
+                    VALUES (?, ?, ?, ?, ?)
                 `;
-            const taskId = await Database.execute(query, [title, description, link, createdBy]).then(result => result.insertId);
+            const taskId = await Database.execute(query, [title, description, link, createdBy, createdAtChannel]).then(result => result.insertId);
             Logger.info(`Task created with ID ${taskId}`);
 
-            const deadline = (time && date) ? VietnamTime.parseDate(date).hours(parseInt(time.split(':')[0], 10)).minutes(parseInt(time.split(':')[1], 10)).seconds(0).milliseconds(0).toDate()
-                : (date ? VietnamTime.parseDate(date).hours(23).minutes(59).seconds(59).milliseconds(0).toDate()
-                    : (time ? VietnamTime.nextOccurrenceOf(time).toDate() : null));
+            // Logic mới cho deadline:
+            // - Cả time và date: giờ cụ thể trong ngày cụ thể
+            // - Chỉ có date: 23h trong ngày đó
+            // - Chỉ có time: giờ đó trong cùng ngày (nếu đã qua thì ngày hôm sau)
+            // - Không có gì: null (không deadline)
+            let deadline = null;
+            if (time && date) {
+                // Có cả giờ và ngày
+                deadline = VietnamTime.parseDate(date)
+                    .hours(parseInt(time.split(':')[0], 10))
+                    .minutes(parseInt(time.split(':')[1], 10))
+                    .seconds(0)
+                    .milliseconds(0)
+                    .toDate();
+            } else if (date) {
+                // Chỉ có ngày -> 23h trong ngày đó
+                deadline = VietnamTime.parseDate(date)
+                    .hours(23)
+                    .minutes(0)
+                    .seconds(0)
+                    .milliseconds(0)
+                    .toDate();
+            } else if (time) {
+                // Chỉ có giờ -> giờ đó trong cùng ngày (nếu đã qua thì ngày mai)
+                deadline = VietnamTime.nextOccurrenceOf(time)
+                    .seconds(0)
+                    .milliseconds(0)
+                    .toDate();
+            }
+            // else: không có time và date -> deadline = null
 
             for (const userId of userIds) {
                 const assignmentQuery = `
@@ -148,73 +184,292 @@ class TaskManagerModule {
                 Logger.info(`Task ${taskId} assigned to user ${userId} with deadline ${deadline}`);
             }
 
-            let remindType = '';
-
-            // Schedule a reminder 23 hours before the deadline if time & date is not provided
-            if (!time && !date) {
-                const reminderTime = VietnamTime.defaultReminderTime();
-
-                remindType = '23Auto'
-
-                await NodeCron.createOneTimeJob({
-                    name: `task-reminder-${taskId}`,
-                    description: `Reminder for task: ${title}`,
-                    scheduledTime: reminderTime,
-                    functionName: 'sendTaskReminder',
-                    moduleName: 'taskManager',
-                    functionParams: { taskId, userIds, remindType, createdAtChannel }
-                });
-            }
-
-            // If date is provided, set reminder for 14, 7, 3 days before
-            if (date) {
-                const daysUntilDeadline = VietnamTime.daysUntil(date);
-                const reminderDates = VietnamTime.createReminderDates(date, [14, 7, 3]);
-
-                for (const reminderDate of reminderDates) {
-                    remindType = `${reminderDate}Day`
-                    await NodeCron.createOneTimeJob({
-                        name: `task-reminder-${taskId}-${reminderDate.valueOf()}`,
-                        description: `Reminder for task: ${title}`,
-                        scheduledTime: VietnamTime.toDate(reminderDate),
-                        functionName: 'sendTaskReminder',
-                        moduleName: 'taskManager',
-                        functionParams: { taskId, userIds, remindType, createdAtChannel }
-                    });
-                }
-
-                Logger.info(`Created ${reminderDates.length} reminder(s) for task ${taskId} with deadline ${date}`);
-            }
-
-            if (time) {
-                // Calculate time until deadline using VietnamTime helper
-                const timeUntilDeadline = VietnamTime.nextOccurrenceOf(time);
-
-                // Schedule reminder 1 hour before the deadline
-                const reminderTime = timeUntilDeadline.subtract(1, 'hour');
-
-                Logger.info(`Scheduling task reminder for: ${VietnamTime.formatVN(reminderTime).fullDisplay} (1 hour before deadline)`);
-
-                // Convert to native Date object for scheduling
-                const scheduledDate = VietnamTime.toDate(reminderTime);
-
-                remindType = 'TimeOnly';
-
-                await NodeCron.createOneTimeJob({
-                    name: `task-reminder-${taskId}-${scheduledDate.getTime()}`,
-                    description: `Reminder for task: ${title}`,
-                    scheduledTime: scheduledDate,
-                    functionName: 'sendTaskReminder',
-                    moduleName: 'taskManager',
-                    functionParams: { taskId, userIds, remindType, createdAtChannel }
-                });
-            }
+            // Logic mới cho reminders dựa theo deadline
+            await this.createTaskReminders(taskId, title, userIds, time, date, deadline, createdAtChannel);
 
             return true;
 
         } catch (error) {
             Logger.error(`Failed to create task: ${error.message}`);
             throw error;
+        }
+    }
+
+    /**
+     * Create reminders for a task based on its deadline configuration
+     * @param {number} taskId - The ID of the task
+     * @param {string} title - The title of the task
+     * @param {Array} userIds - Array of user IDs
+     * @param {string} time - Time string (HH:MM) or null
+     * @param {string} date - Date string (DD-MM-YYYY) or null
+     * @param {Date} deadline - Calculated deadline Date object or null
+     * @param {string} createdAtChannel - Channel ID where task was created
+     */
+    async createTaskReminders(taskId, title, userIds, time, date, deadline, createdAtChannel) {
+        try {
+            // Trường hợp 1: Không có deadline (không có time và date)
+            // -> Tạo reminder hàng tuần
+            if (!time && !date) {
+                Logger.info(`Creating weekly reminder for task ${taskId} (no deadline)`);
+
+                await NodeCron.createCronJob({
+                    name: `task-weekly-reminder-${taskId}`,
+                    description: `Weekly reminder for task: ${title}`,
+                    cronExpression: '0 9 * * 1', // Mỗi thứ 2 lúc 9h sáng
+                    functionName: 'sendWeeklyTaskReminder',
+                    moduleName: 'taskManager',
+                    functionParams: { taskId, userIds, createdAtChannel }
+                });
+
+                return;
+            }
+
+            // Trường hợp 2: Có date (có thể có hoặc không có time)
+            // -> Tạo reminder 14, 7, 3 ngày trước
+            if (date) {
+                const daysUntilDeadline = VietnamTime.daysUntil(date);
+                const reminderDates = VietnamTime.createReminderDates(date, [14, 7, 3]);
+
+                for (const reminderDate of reminderDates) {
+                    const daysBeforeDeadline = Math.ceil((deadline - VietnamTime.toDate(reminderDate)) / (1000 * 60 * 60 * 24));
+
+                    await NodeCron.createOneTimeJob({
+                        name: `task-reminder-${taskId}-${reminderDate.valueOf()}`,
+                        description: `Reminder ${daysBeforeDeadline} days before deadline for task: ${title}`,
+                        scheduledTime: VietnamTime.toDate(reminderDate),
+                        functionName: 'sendTaskReminder',
+                        moduleName: 'taskManager',
+                        functionParams: {
+                            taskId,
+                            userIds,
+                            remindType: `${daysBeforeDeadline}Day`,
+                            createdAtChannel
+                        }
+                    });
+                }
+
+                Logger.info(`Created ${reminderDates.length} date-based reminder(s) for task ${taskId}`);
+            }
+
+            // Trường hợp 3: Chỉ có time (không có date)
+            // -> Reminder 1 giờ trước giờ deadline
+            if (time && !date) {
+                const timeUntilDeadline = VietnamTime.nextOccurrenceOf(time);
+                const reminderTime = timeUntilDeadline.clone().subtract(1, 'hour');
+
+                // Chỉ tạo reminder nếu reminder time chưa qua
+                if (VietnamTime.toDate(reminderTime) > VietnamTime.toDate(VietnamTime.now())) {
+                    Logger.info(`Scheduling time-based reminder for: ${VietnamTime.formatVN(reminderTime).fullDisplay} (1 hour before deadline)`);
+
+                    await NodeCron.createOneTimeJob({
+                        name: `task-reminder-${taskId}-${reminderTime.valueOf()}`,
+                        description: `Reminder 1 hour before deadline for task: ${title}`,
+                        scheduledTime: VietnamTime.toDate(reminderTime),
+                        functionName: 'sendTaskReminder',
+                        moduleName: 'taskManager',
+                        functionParams: { taskId, userIds, remindType: '1Hour', createdAtChannel }
+                    });
+                } else {
+                    Logger.warn(`Reminder time has passed for task ${taskId}, skipping 1-hour reminder`);
+                }
+            }
+
+        } catch (error) {
+            Logger.error(`Failed to create task reminders: ${error.message}`);
+            // Không throw error để không ảnh hưởng đến việc tạo task
+        }
+    }
+
+    /**
+     * Restore task reminders after bot restart
+     * Checks database for active tasks and recreates their cron jobs
+     */
+    async restoreTaskReminders() {
+        try {
+            Logger.loading('Restoring task reminders...');
+
+            // Get all active tasks (in_progress and pending)
+            const query = `
+                SELECT DISTINCT
+                    tasks.id,
+                    tasks.title,
+                    tasks.status,
+                    tasks.created_at,
+                    tasks.created_at_channel,
+                    task_assignments.deadline,
+                    task_assignments.user_id
+                FROM tasks
+                LEFT JOIN task_assignments ON tasks.id = task_assignments.task_id
+                WHERE tasks.status IN ('in_progress', 'pending')
+                ORDER BY tasks.id
+            `;
+
+            const tasks = await Database.execute(query);
+
+            if (tasks.length === 0) {
+                Logger.info('No active tasks found to restore reminders');
+                return;
+            }
+
+            // Group tasks by task_id to get all user_ids
+            const taskMap = new Map();
+            for (const task of tasks) {
+                if (!taskMap.has(task.id)) {
+                    taskMap.set(task.id, {
+                        id: task.id,
+                        title: task.title,
+                        status: task.status,
+                        created_at: task.created_at,
+                        created_at_channel: task.created_at_channel,
+                        deadline: task.deadline,
+                        userIds: []
+                    });
+                }
+                if (task.user_id) {
+                    taskMap.get(task.id).userIds.push(task.user_id);
+                }
+            }
+
+            Logger.info(`Found ${taskMap.size} active tasks to restore reminders`);
+
+            let restoredCount = 0;
+            for (const [taskId, taskData] of taskMap) {
+                try {
+                    // Determine if task has deadline and what type
+                    if (!taskData.deadline) {
+                        // No deadline -> weekly reminder
+                        await this.restoreWeeklyReminder(taskData);
+                        restoredCount++;
+                    } else {
+                        // Has deadline -> restore appropriate reminders
+                        await this.restoreDateTimeReminders(taskData);
+                        restoredCount++;
+                    }
+                } catch (error) {
+                    Logger.warn(`Failed to restore reminders for task ${taskId}: ${error.message}`);
+                }
+            }
+
+            Logger.success(`✅ Restored reminders for ${restoredCount}/${taskMap.size} tasks`);
+
+        } catch (error) {
+            Logger.error(`Failed to restore task reminders: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Restore weekly reminder for task without deadline
+     * @param {Object} taskData - Task data object
+     */
+    async restoreWeeklyReminder(taskData) {
+        try {
+            // Check if weekly reminder cron job already exists
+            const existingJob = await Database.execute(
+                'SELECT id FROM cron_jobs WHERE name = ?',
+                [`task-weekly-reminder-${taskData.id}`]
+            );
+
+            if (existingJob.length > 0) {
+                Logger.info(`Weekly reminder already exists for task ${taskData.id}`);
+                return;
+            }
+
+            // Create weekly reminder
+            await NodeCron.createCronJob({
+                name: `task-weekly-reminder-${taskData.id}`,
+                description: `Weekly reminder for task: ${taskData.title}`,
+                cronExpression: '0 9 * * 1', // Mỗi thứ 2 lúc 9h sáng
+                functionName: 'sendWeeklyTaskReminder',
+                moduleName: 'taskManager',
+                functionParams: {
+                    taskId: taskData.id,
+                    userIds: taskData.userIds,
+                    createdAtChannel: taskData.created_at_channel
+                }
+            });
+
+            Logger.info(`✅ Restored weekly reminder for task ${taskData.id}`);
+
+        } catch (error) {
+            Logger.error(`Failed to restore weekly reminder for task ${taskData.id}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Restore date/time based reminders for tasks with deadline
+     * @param {Object} taskData - Task data object
+     */
+    async restoreDateTimeReminders(taskData) {
+        try {
+            const now = VietnamTime.now();
+            const deadline = VietnamTime.create(taskData.deadline);
+
+            // Check if deadline has already passed
+            if (deadline.isBefore(now)) {
+                Logger.info(`Deadline has passed for task ${taskData.id}, skipping reminder restoration`);
+                return;
+            }
+
+            const deadlineTime = deadline.format('HH:mm');
+            const isEndOfDay = deadlineTime === '23:00'; // Deadline là 23h -> chỉ có date
+
+            // Case 1: Date-based deadline (23:00 = only date was provided)
+            if (isEndOfDay) {
+                const daysUntilDeadline = deadline.diff(now, 'days');
+                const reminders = [14, 7, 3].filter(days => daysUntilDeadline >= days);
+
+                for (const daysBeforeDeadline of reminders) {
+                    const reminderDate = deadline.clone().subtract(daysBeforeDeadline, 'days').startOf('day').hours(9);
+
+                    // Only create if reminder time is in the future
+                    if (reminderDate.isAfter(now)) {
+                        await NodeCron.createOneTimeJob({
+                            name: `task-reminder-${taskData.id}-${reminderDate.valueOf()}`,
+                            description: `Reminder ${daysBeforeDeadline} days before deadline for task: ${taskData.title}`,
+                            scheduledTime: VietnamTime.toDate(reminderDate),
+                            functionName: 'sendTaskReminder',
+                            moduleName: 'taskManager',
+                            functionParams: {
+                                taskId: taskData.id,
+                                userIds: taskData.userIds,
+                                remindType: `${daysBeforeDeadline}Day`,
+                                createdAtChannel: taskData.created_at_channel
+                            }
+                        });
+                    }
+                }
+
+                Logger.info(`✅ Restored date-based reminders for task ${taskData.id}`);
+            }
+            // Case 2: Time-based deadline (specific hour)
+            else {
+                const reminderTime = deadline.clone().subtract(1, 'hour');
+
+                // Only create if reminder time is in the future
+                if (reminderTime.isAfter(now)) {
+                    await NodeCron.createOneTimeJob({
+                        name: `task-reminder-${taskData.id}-${reminderTime.valueOf()}`,
+                        description: `Reminder 1 hour before deadline for task: ${taskData.title}`,
+                        scheduledTime: VietnamTime.toDate(reminderTime),
+                        functionName: 'sendTaskReminder',
+                        moduleName: 'taskManager',
+                        functionParams: {
+                            taskId: taskData.id,
+                            userIds: taskData.userIds,
+                            remindType: '1Hour',
+                            createdAtChannel: taskData.created_at_channel
+                        }
+                    });
+
+                    Logger.info(`✅ Restored time-based reminder for task ${taskData.id}`);
+                } else {
+                    Logger.info(`Reminder time has passed for task ${taskData.id}`);
+                }
+            }
+
+        } catch (error) {
+            Logger.error(`Failed to restore date/time reminders for task ${taskData.id}: ${error.message}`);
         }
     }
 
@@ -542,6 +797,120 @@ class TaskManagerModule {
     }
 
     /**
+     * Send weekly reminder for tasks without deadline
+     * @param {Object} params - The parameters for the reminder
+     */
+    async sendWeeklyTaskReminder(params) {
+        const { taskId, userIds, createdAtChannel } = params;
+
+        try {
+            // Get task details
+            const task = await Database.execute('SELECT * FROM tasks WHERE id = ?', [taskId]);
+
+            // Check if task exists
+            if (!task || task.length === 0) {
+                Logger.info(`Task ${taskId} not found for weekly reminder, may have been deleted`);
+                return;
+            }
+
+            // Check task status before sending reminder
+            if (task[0].status === 'completed' || task[0].status === 'canceled') {
+                Logger.info(`Task ${taskId} is already ${task[0].status}. Stopping weekly reminders.`);
+
+                // Stop the cron job
+                await NodeCron.stopCronJobByName(`task-weekly-reminder-${taskId}`);
+                return;
+            }
+
+            // Send to server channel
+            const channel = this.client.channels.cache.get(createdAtChannel);
+            if (!channel) {
+                Logger.error(`Channel ${createdAtChannel} not found for weekly task reminder`);
+                return;
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor('#FFA500')
+                .setTitle('📅 Nhắc nhở công việc hàng tuần')
+                .setDescription('Công việc này chưa có deadline, đây là nhắc nhở định kỳ:')
+                .addFields(
+                    { name: 'Công việc:', value: task[0].title },
+                    { name: 'Trạng thái:', value: task[0].status === 'in_progress' ? '⏳ Đang thực hiện' : task[0].status }
+                )
+                .setTimestamp();
+
+            if (task[0].description) {
+                embed.addFields({ name: 'Mô tả:', value: task[0].description });
+            }
+
+            if (task[0].link) {
+                embed.addFields({ name: 'Liên kết:', value: task[0].link });
+            }
+
+            if (task[0].created_by_user_id) {
+                embed.addFields({ name: 'Người tạo:', value: `<@${task[0].created_by_user_id}>` });
+            }
+
+            const button = new ButtonBuilder()
+                .setCustomId(`markComplete`)
+                .setLabel('Đánh dấu hoàn thành')
+                .setStyle(ButtonStyle.Success);
+            const actionRow = new ActionRowBuilder().addComponents(button);
+
+            const mentionString = userIds.map(id => `<@${id}>`).join(' ');
+            const remindMessage = await channel.send({
+                content: `📢 ${mentionString} - Nhắc nhở hàng tuần`,
+                embeds: [embed],
+                components: [actionRow]
+            });
+
+            Logger.info(`Sent weekly reminder to users for task ${taskId}`);
+
+            const filter = i => {
+                return userIds.includes(i.user.id) && i.customId === `markComplete`;
+            };
+
+            const collector = remindMessage.createMessageComponentCollector({
+                filter,
+                time: 300000,
+                max: 1
+            });
+
+            collector.on('collect', async i => {
+                try {
+                    await i.deferUpdate();
+                    Logger.info(`Button clicked by user ${i.user.id} for task ${taskId}`);
+
+                    const result = await this.markTaskAsCompleted(taskId);
+
+                    if (result) {
+                        await i.editReply({
+                            content: `✅ <@${i.user.id}> đã đánh dấu công việc **${task[0].title}** là hoàn thành.`,
+                            embeds: [],
+                            components: []
+                        });
+
+                        // Stop weekly reminder
+                        await NodeCron.stopCronJobByName(`task-weekly-reminder-${taskId}`);
+                        Logger.info(`Task ${taskId} marked as completed, weekly reminder stopped`);
+                    } else {
+                        await i.editReply({
+                            content: '❌ Không thể đánh dấu công việc là hoàn thành.',
+                            embeds: [],
+                            components: []
+                        });
+                    }
+                } catch (error) {
+                    Logger.error(`Error handling button click for weekly reminder task ${taskId}: ${error.message}`);
+                }
+            });
+
+        } catch (error) {
+            Logger.error(`Error sending weekly task reminder: ${error.message}`);
+        }
+    }
+
+    /**
      * Send a reminder to the user about an upcoming task
      * @param {Object} params - The parameters for the reminder
     */
@@ -565,14 +934,11 @@ class TaskManagerModule {
 
         // Generate last paragraph of the reminder message based on remindType
         let lastParagraph = '';
-        if (remindType === '23Auto') {
-            lastParagraph = 'Sắp hết hạn! Đây là nhắc nhở tự động 23 giờ sau khi tạo nhiệm vụ.';
+        if (remindType === '1Hour') {
+            lastParagraph = '⏰ Còn 1 giờ nữa là đến hạn!';
         } else if (remindType.endsWith('Day')) {
             const days = remindType.replace('Day', '');
-            lastParagraph = `Còn ${days} ngày nữa là đến hạn!`;
-        } else if (remindType === 'TimeOnly') {
-            const time = VietnamTime.formatVN(VietnamTime.now().add(1, 'hour')).fullDisplay;
-            lastParagraph = `1 giờ! (${time})`;
+            lastParagraph = `📅 Còn ${days} ngày nữa là đến hạn!`;
         }
 
         try {
