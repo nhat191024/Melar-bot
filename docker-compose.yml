@@ -3,9 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: melar-discord-bot:latest
     container_name: Melar-bot
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
       - .:/app
       - /app/node_modules
+    networks:
+      - web-network
+
+networks:
+  web-network:
+    external: true
