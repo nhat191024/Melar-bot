@@ -21,7 +21,7 @@ COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
 # Set entrypoint
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]
 
 # Start the application
 CMD ["pnpm", "start"]
