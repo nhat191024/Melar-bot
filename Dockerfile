@@ -5,7 +5,7 @@ FROM node:18-bullseye-slim
 WORKDIR /app
 
 # Install pnpm globally
-RUN npm install -g pnpm@10.12.4
+RUN npm install -g pnpm@latest
 
 # Copy package.json and pnpm-lock.yaml for caching
 COPY package.json pnpm-lock.yaml ./
@@ -16,8 +16,12 @@ RUN pnpm install --frozen-lockfile --prod
 # Create a non-root user and group
 RUN groupadd -r botuser && useradd -r -g botuser botuser
 
-# Switch to the non-root user
-USER botuser
+# Copy entrypoint script
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
 
 # Start the application
 CMD ["pnpm", "start"]
