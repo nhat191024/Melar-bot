@@ -5,7 +5,7 @@ FROM node:18-bullseye-slim
 WORKDIR /app
 
 # Install pnpm globally
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@10.12.4
 
 # Copy package.json and pnpm-lock.yaml for caching
 COPY package.json pnpm-lock.yaml ./
@@ -20,7 +20,7 @@ RUN groupadd -r botuser && useradd -r -g botuser botuser
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
-# Set entrypoint
+# Set the entrypoint
 ENTRYPOINT ["/bin/bash", "./entrypoint.sh"]
 
 # Start the application
