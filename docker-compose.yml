@@ -11,8 +11,8 @@ services:
       - .:/app
       - /app/node_modules
     networks:
-      - web-network
+      - coolify
 
 networks:
-  web-network:
+  coolify:
     external: true
