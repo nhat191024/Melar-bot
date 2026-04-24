@@ -18,6 +18,28 @@ class ModuleManager {
         // type: 'button' | 'modal' | 'select'
         // match: 'startsWith' (default) | 'exact'
         this.interactionHandlers = [];
+
+        // API server instance (set by DiscordBot before loadModules/loadCommands)
+        // Modules and commands register routes via registerApiRoute()
+        this.apiServer = null;
+    }
+
+    /**
+     * Register an API route on the core ApiServer.
+     * Called by modules in registerApiRoutes() or commands in registerApiRoutes().
+     * @param {object} options
+     * @param {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'} options.method
+     * @param {string} options.path
+     * @param {Function} options.handler - async (request, reply) => any
+     * @param {boolean} [options.auth=true]
+     * @param {object} [options.schema]
+     */
+    registerApiRoute({ method, path, handler, auth = true, schema = undefined }) {
+        if (!this.apiServer) {
+            Logger.warn(`Cannot register API route ${method} ${path}: API server not initialized`);
+            return;
+        }
+        this.apiServer.route({ method, path, handler, auth, schema });
     }
 
     /**
@@ -85,6 +107,11 @@ class ModuleManager {
                     await moduleInstance.load();
                 }
 
+                // Let module register its own API routes
+                if (typeof moduleInstance.registerApiRoutes === 'function') {
+                    moduleInstance.registerApiRoutes(this);
+                }
+
                 Logger.module(`Loaded module: ${moduleName}`);
             } catch (error) {
                 Logger.error(`Failed to load module ${moduleName}: ${error.message}`);
@@ -144,6 +171,11 @@ class ModuleManager {
                     // Let command register its own interaction handlers
                     if (typeof commandInstance.registerInteractionHandlers === 'function') {
                         commandInstance.registerInteractionHandlers(this);
+                    }
+
+                    // Let command register its own API routes
+                    if (typeof commandInstance.registerApiRoutes === 'function') {
+                        commandInstance.registerApiRoutes(this);
                     }
                 } catch (error) {
                     Logger.error(`Failed to load command from ${itemPath}: ${error.message}`);

@@ -114,6 +114,12 @@ class Config {
                 return process.env.DISCORD_GUILD_ID;
             case 'environment':
                 return process.env.NODE_ENV || 'development';
+            case 'apiEnabled':
+                return process.env.API_ENABLED !== 'false';
+            case 'apiPort':
+                return process.env.API_PORT || '3000';
+            case 'apiKey':
+                return process.env.API_KEY || null;
             default:
                 return process.env[key.toUpperCase()];
         }

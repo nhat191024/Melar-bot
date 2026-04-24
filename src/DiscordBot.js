@@ -4,6 +4,7 @@ const Logger = require('./utils/Logger');
 const ModuleManager = require('./utils/ModuleManager');
 const Database = require('./utils/Database');
 const NodeCron = require('./utils/NodeCron');
+const ApiServer = require('./core/api/ApiServer');
 
 class DiscordBot extends Client {
     constructor() {
@@ -47,6 +48,15 @@ class DiscordBot extends Client {
             // Cleanup existing handlers (important for development with --watch)
             this.moduleManager.cleanup();
 
+            // Initialize API server (routes are registered during module/command load)
+            if (Config.get('apiEnabled') !== false) {
+                this.apiServer = new ApiServer({
+                    port: parseInt(Config.get('apiPort') || 3000),
+                    apiKey: Config.get('apiKey') || null
+                });
+                this.moduleManager.apiServer = this.apiServer;
+            }
+
             // Load modules first
             await this.moduleManager.loadModules();
 
@@ -56,6 +66,11 @@ class DiscordBot extends Client {
             // Load commands and events
             await this.moduleManager.loadCommands();
             await this.moduleManager.loadEvents();
+
+            // Start API server after all routes have been registered
+            if (this.apiServer) {
+                await this.apiServer.start();
+            }
 
             // Login to Discord only if not already logged in
             if (!this.isReady()) {
