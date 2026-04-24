@@ -1,6 +1,6 @@
 {
   "name": "melar-discord-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Modular Discord bot built with Discord.js v14",
   "main": "index.js",
   "scripts": {
