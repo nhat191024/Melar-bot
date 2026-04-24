@@ -40,13 +40,16 @@ class ModuleManager {
             return;
         }
 
-        const moduleFiles = fs.readdirSync(modulesPath);
+        const entries = fs.readdirSync(modulesPath, { withFileTypes: true });
 
         Logger.info('-------------------- Start loading modules --------------------');
-        for (const moduleFile of moduleFiles) {
-            if (!moduleFile.endsWith('.js')) continue;
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
 
-            const moduleName = path.basename(moduleFile, '.js');
+            const moduleName = entry.name;
+            const indexPath = path.join(modulesPath, moduleName, 'index.js');
+
+            if (!fs.existsSync(indexPath)) continue;
 
             if (!this.isModuleEnabled(moduleName)) {
                 Logger.info(`Module ${moduleName} is disabled, skipping...`);
@@ -54,7 +57,7 @@ class ModuleManager {
             }
 
             try {
-                const ModuleClass = require(path.join(modulesPath, moduleFile));
+                const ModuleClass = require(indexPath);
                 const moduleInstance = new ModuleClass(this.client);
 
                 this.modules.set(moduleName, moduleInstance);
@@ -71,16 +74,25 @@ class ModuleManager {
     }
 
     async loadCommands() {
-        const commandsPath = path.join(__dirname, '../commands');
+        Logger.info('-------------------- Start loading commands --------------------');
 
-        if (!fs.existsSync(commandsPath)) {
-            Logger.warn('Commands directory not found, creating it...');
-            fs.mkdirSync(commandsPath, { recursive: true });
-            return;
+        const modulesPath = path.join(__dirname, '../modules');
+        const coreCommandsPath = path.join(__dirname, '../core/commands');
+
+        if (fs.existsSync(modulesPath)) {
+            const moduleEntries = fs.readdirSync(modulesPath, { withFileTypes: true });
+            for (const entry of moduleEntries) {
+                if (!entry.isDirectory()) continue;
+                const commandsPath = path.join(modulesPath, entry.name, 'commands');
+                if (fs.existsSync(commandsPath)) {
+                    await this.loadCommandsFromDirectory(commandsPath);
+                }
+            }
         }
 
-        Logger.info('-------------------- Start loading commands --------------------');
-        await this.loadCommandsFromDirectory(commandsPath);
+        if (fs.existsSync(coreCommandsPath)) {
+            await this.loadCommandsFromDirectory(coreCommandsPath);
+        }
     }
 
     async loadCommandsFromDirectory(dirPath) {
@@ -117,7 +129,7 @@ class ModuleManager {
     }
 
     async loadEvents() {
-        const eventsPath = path.join(__dirname, '../events');
+        const eventsPath = path.join(__dirname, '../core/events');
 
         if (!fs.existsSync(eventsPath)) {
             Logger.warn('Events directory not found, creating it...');
@@ -219,10 +231,11 @@ class ModuleManager {
         }
 
         // Clear module cache
-        delete require.cache[require.resolve(`../modules/${moduleName}.js`)];
+        const modulePath = path.join(__dirname, '../modules', moduleName, 'index.js');
+        delete require.cache[require.resolve(modulePath)];
 
         try {
-            const ModuleClass = require(`../modules/${moduleName}.js`);
+            const ModuleClass = require(modulePath);
             const moduleInstance = new ModuleClass(this.client);
 
             this.modules.set(moduleName, moduleInstance);
