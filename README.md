@@ -60,4 +60,4 @@ Một đống thứ random sht
 - **Người đặt:** miraihm
 - **Phát triển:** nhat191024 - taiyo_furuhashi
 - **Dành cho:** Melar Studio
-- **Link Discord:** https://discord.gg/zzebkZa7H8
+- **Link Discord:** Private
