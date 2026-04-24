@@ -244,6 +244,15 @@ class AddNoteCommand extends BaseCommand {
 
         return true;
     }
+
+    registerInteractionHandlers(moduleManager) {
+        moduleManager.registerInteractionHandler({
+            customId: 'note_add_modal',
+            type: 'modal',
+            match: 'exact',
+            handler: (interaction) => this.handleModalSubmit(interaction)
+        });
+    }
 }
 
 module.exports = AddNoteCommand;

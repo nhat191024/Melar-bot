@@ -232,6 +232,15 @@ class AddTaskCommand extends BaseCommand {
 
         return modal;
     }
+
+    registerInteractionHandlers(moduleManager) {
+        moduleManager.registerInteractionHandler({
+            customId: 'task_add_modal',
+            type: 'modal',
+            match: 'exact',
+            handler: (interaction) => this.handleModalSubmit(interaction)
+        });
+    }
 }
 
 module.exports = AddTaskCommand;

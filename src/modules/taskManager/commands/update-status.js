@@ -294,6 +294,19 @@ class TaskUpdateStatusCommand extends BaseCommand {
             return null;
         }
     }
+
+    registerInteractionHandlers(moduleManager) {
+        moduleManager.registerInteractionHandler({
+            customId: 'task_update_status_',
+            type: 'select',
+            handler: async (interaction) => {
+                const taskId = parseInt(interaction.customId.split('_')[3]);
+                const selectedStatus = interaction.values[0];
+                await this.handleStatusUpdate(interaction, taskId, selectedStatus);
+                return true;
+            }
+        });
+    }
 }
 
 module.exports = TaskUpdateStatusCommand;

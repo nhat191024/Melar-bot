@@ -428,7 +428,6 @@ class TaskHistoryCommand extends BaseCommand {
 
     async handleButtonInteraction(interaction) {
         if (!interaction.customId.startsWith('task_history_')) return false;
-
         const parts = interaction.customId.split('_');
         const action = parts[2]; // prev, next, back, page
 
@@ -509,6 +508,25 @@ class TaskHistoryCommand extends BaseCommand {
         }
 
         return false;
+    }
+
+    registerInteractionHandlers(moduleManager) {
+        moduleManager.registerInteractionHandler({
+            customId: 'task_history_',
+            type: 'button',
+            handler: (interaction) => this.handleButtonInteraction(interaction)
+        });
+        moduleManager.registerInteractionHandler({
+            customId: 'task_history_status_',
+            type: 'select',
+            handler: async (interaction) => {
+                const targetUserId = interaction.customId.split('_')[3];
+                const selectedStatus = interaction.values[0];
+                await interaction.deferUpdate();
+                await this.handleStatusSelection(interaction, selectedStatus, targetUserId);
+                return true;
+            }
+        });
     }
 }
 

@@ -265,6 +265,63 @@ class NumberGuessCommand extends BaseCommand {
 
         await interaction.followUp({ embeds: [resultEmbed] });
     }
+
+    async handleButtonInteraction(interaction) {
+        const funModule = interaction.client.moduleManager.getModule('fun');
+        if (!funModule) return false;
+
+        const game = funModule.getActiveGame(interaction.channelId);
+
+        if (!game || game.type !== 'number_guess') {
+            await interaction.reply({
+                content: 'No active guessing game in this channel!',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (game.playerId !== interaction.user.id) {
+            await interaction.reply({
+                content: 'This is not your game!',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const action = interaction.customId.split('_')[1];
+
+        if (action === 'quit') {
+            funModule.endGame(interaction.channelId);
+            await interaction.reply('🏃‍♂️ You quit the game! The game has ended.');
+            return true;
+        }
+
+        if (action === 'hint') {
+            const { secretNumber, maxNumber } = game;
+            const isHigh = secretNumber > maxNumber / 2;
+            const hint = isHigh ? 'higher half' : 'lower half';
+            await interaction.reply({
+                content: `💡 Hint: The number is in the ${hint} of the range!`,
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const guess = parseInt(action);
+        if (isNaN(guess)) return false;
+
+        await interaction.deferReply();
+        await this.processGuess(interaction, guess, funModule);
+        return true;
+    }
+
+    registerInteractionHandlers(moduleManager) {
+        moduleManager.registerInteractionHandler({
+            customId: 'guess_',
+            type: 'button',
+            handler: (interaction) => this.handleButtonInteraction(interaction)
+        });
+    }
 }
 
 module.exports = NumberGuessCommand;

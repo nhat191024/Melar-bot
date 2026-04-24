@@ -13,6 +13,24 @@ class ModuleManager {
 
         // Core modules that should always be enabled
         this.coreModules = ['core'];
+
+        // Interaction handler registry: [{ customId, match, type, handler }]
+        // type: 'button' | 'modal' | 'select'
+        // match: 'startsWith' (default) | 'exact'
+        this.interactionHandlers = [];
+    }
+
+    /**
+     * Register an interaction handler for a specific customId.
+     * Called by commands in their registerInteractionHandlers() method.
+     * @param {object} config
+     * @param {string} config.customId - The customId string to match
+     * @param {'button'|'modal'|'select'} config.type - Interaction type
+     * @param {'startsWith'|'exact'} [config.match='startsWith'] - Match strategy
+     * @param {Function} config.handler - Async function(interaction) → true if handled
+     */
+    registerInteractionHandler({ customId, type, match = 'startsWith', handler }) {
+        this.interactionHandlers.push({ customId, type, match, handler });
     }
 
     // Cleanup existing handlers before loading new ones
@@ -27,6 +45,7 @@ class ModuleManager {
         this.commands.clear();
         this.events.clear();
         this.cooldowns.clear();
+        this.interactionHandlers = [];
 
         Logger.debug('Cleaned up existing handlers');
     }
@@ -121,6 +140,11 @@ class ModuleManager {
 
                     this.commands.set(commandInstance.name, commandInstance);
                     Logger.command(`Loaded command: ${commandInstance.name}`);
+
+                    // Let command register its own interaction handlers
+                    if (typeof commandInstance.registerInteractionHandlers === 'function') {
+                        commandInstance.registerInteractionHandlers(this);
+                    }
                 } catch (error) {
                     Logger.error(`Failed to load command from ${itemPath}: ${error.message}`);
                 }
